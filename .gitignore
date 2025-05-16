@@ -1,0 +1,28 @@
+# IDE/Editor Specific
+.vscode/
+.DS_Store
+
+# Python Bytecode
+__pycache__/
+*.pyc
+
+# Build Files
+*.egg-info
+
+# Logs and Outputs
+*.log
+lightning_logs/
+outputs/
+wandb/
+
+# Pytest Cache
+.pytest_cache/
+
+
+# Notebooks
+
+# Datasets and Checkpoints
+datasets/
+checkpoints/
+
+

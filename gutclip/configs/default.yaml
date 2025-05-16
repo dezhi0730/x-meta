@@ -1,0 +1,41 @@
+# gutclip/configs/default.yaml
+# -----------------------------------------------------------
+# 训练 & 数据 & wandb 的默认配置示例
+# -----------------------------------------------------------
+name: gutclip_exp
+seed: 42
+
+epochs: 200
+patience: 50
+batch_size: 32
+num_workers: 8
+lr: 5e-5
+wd: 0.01
+precision: amp          # "amp" / "fp32"
+max_grad_norm: 1.0
+local_loss: false       # true=仅同卡；false=跨卡 all-gather
+log_interval: 50
+
+# model config 
+
+tree_dim: 256
+dna_dim: 768
+embed_dim: 1280
+
+# ----- 数据 --------------------------------------------------
+data:
+  train_meta: /data/home/wudezhi/project/gutclip/datasets/test/train_meta.csv   # 必含 'sample_id' 列
+  val_meta:  /data/home/wudezhi/project/gutclip/datasets/test/val_meta.csv
+
+  dna_dir:   /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/dna_embedding_v3    # {sample_id}.pt / .npy / .h5
+  tree_dir:  /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/tree   # 同一个目录，被 train/val 共用
+
+  dna_ext:  .pt
+  tree_ext: .pt
+
+  max_genes: 1024
+
+# ----- wandb -------------------------------------------------
+wandb:
+  project: gutclip
+  mode: online            # online / offline / disabled

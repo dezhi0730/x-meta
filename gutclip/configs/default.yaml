@@ -1,41 +1,43 @@
 # gutclip/configs/default.yaml
 # -----------------------------------------------------------
-# 训练 & 数据 & wandb 的默认配置示例
+# 训练 & 数据 & wandb 的默认配置
+# 注意：这些参数可以通过 train_ddp.sh 中的 OVERRIDE_PARAMS 覆盖
 # -----------------------------------------------------------
 name: gutclip_exp
 seed: 42
 
-epochs: 200
-patience: 50
-batch_size: 32
-num_workers: 8
-lr: 5e-5
-wd: 0.01
-precision: amp          # "amp" / "fp32"
-max_grad_norm: 1.0
-local_loss: false       # true=仅同卡；false=跨卡 all-gather
-log_interval: 50
+# 训练参数
+epochs: 500              # 总训练轮数
+patience: 200           # 早停耐心值
+min_delta: 0.001        # 最小改善阈值（验证损失改善超过此值才重置耐心计数器）
+batch_size: 32         # 批次大小
+num_workers: 8         # 数据加载线程数
+lr: 5e-5              # 学习率
+wd: 0.01              # 权重衰减
+precision: amp         # 训练精度：amp（混合精度）或 fp32（全精度）
+max_grad_norm: 1.0     # 梯度裁剪阈值
+local_loss: false      # 损失计算范围：true=仅同卡，false=跨卡 all-gather
+log_interval: 50       # 日志打印间隔（批次）
 
-# model config 
-
-tree_dim: 256
-dna_dim: 768
-embed_dim: 1280
+# 模型配置
+tree_dim: 256          # 树结构特征维度
+dna_dim: 768           # DNA特征维度
+embed_dim: 1280        # 嵌入维度
 
 # ----- 数据 --------------------------------------------------
 data:
-  train_meta: /data/home/wudezhi/project/gutclip/datasets/test/train_meta.csv   # 必含 'sample_id' 列
-  val_meta:  /data/home/wudezhi/project/gutclip/datasets/test/val_meta.csv
+  train_meta: /data/home/wudezhi/project/gutclip/datasets/test/train_meta.csv   # 训练集元数据
+  val_meta:  /data/home/wudezhi/project/gutclip/datasets/test/val_meta.csv      # 验证集元数据
 
-  dna_dir:   /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/dna_embedding_v3    # {sample_id}.pt / .npy / .h5
-  tree_dir:  /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/tree   # 同一个目录，被 train/val 共用
+  dna_dir:   /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/dna_embedding_v3    # DNA特征目录
+  tree_dir:  /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/tree                # 树结构特征目录
 
-  dna_ext:  .pt
-  tree_ext: .pt
+  dna_ext:  .pt        # DNA特征文件扩展名
+  tree_ext: .pt        # 树结构特征文件扩展名
 
-  max_genes: 1024
+  max_genes: 1024      # 最大基因数量
 
 # ----- wandb -------------------------------------------------
 wandb:
-  project: gutclip
-  mode: online            # online / offline / disabled
+  project: gutclip     # 项目名称
+  mode: online         # 模式：online/offline/disabled

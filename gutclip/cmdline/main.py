@@ -10,6 +10,7 @@ from torch.cuda.amp import GradScaler
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import wandb
 from pathlib import Path
+import torch.nn as nn
 
 from gutclip.utils.seed import set_seed
 from gutclip.data import GutDataModule
@@ -18,9 +19,11 @@ from gutclip.engine import train_one_epoch, evaluate
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="GutCLIP DDP training")
+    p = argparse.ArgumentParser(description="GutCLIP training")
     p.add_argument("--cfg", type=str, default="gutclip/configs/default.yaml",
                    help="yaml config path")
+    p.add_argument("--ddp", action="store_true",
+                   help="use DistributedDataParallel")
     p.add_argument("opts", nargs=argparse.REMAINDER,
                    help="override yaml (e.g. epochs=10 lr=1e-4)")
     return p.parse_args()
@@ -44,40 +47,44 @@ def setup_ddp():
     return dist.get_rank()
 
 
-def save_checkpoint(model, optimizer, scheduler, epoch, loss, cfg, is_best=False):
-    """保存检查点"""
-    if dist.get_rank() != 0:
+def save_checkpoint(model, optimizer, scheduler,
+                    epoch, val_metrics, cfg,
+                    tag: str):
+    """
+    tag = 'latest' / 'best' / f'e{epoch:03d}_t{top1:.3f}'
+    """
+    if dist.is_initialized() and dist.get_rank() != 0:
         return
 
-    checkpoint_dir = Path("checkpoints")
-    checkpoint_dir.mkdir(exist_ok=True)
-
+    ckpt_dir = Path("checkpoints"); ckpt_dir.mkdir(exist_ok=True)
     ckpt = {
         "epoch": epoch + 1,
         "model": model.module.state_dict() if isinstance(model, DDP) else model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
         "cfg": OmegaConf.to_container(cfg, resolve=True),
+        "metrics": val_metrics
     }
-
-    # 保存最新检查点
-    torch.save(ckpt, checkpoint_dir / f"{cfg.name}_latest.pt")
-    
-    # 如果是最佳模型，额外保存一份
-    if is_best:
-        torch.save(ckpt, checkpoint_dir / f"{cfg.name}_best.pt")
-        print(f"[Checkpoint] Saved best model to checkpoints/{cfg.name}_best.pt")
+    path = ckpt_dir / f"{cfg.name}_{tag}.pt"
+    torch.save(ckpt, path)
+    print(f"[Checkpoint] Saved → {path}")
 
 
 def main():
     args = parse_args()
     cfg  = load_cfg(args.cfg, args.opts)
 
-    rank = setup_ddp()                       # → world_size & rank
-    device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
-    set_seed(cfg.seed + rank)                # 保证多卡 determinism
+    # 根据参数决定是否使用 DDP
+    if args.ddp:
+        rank = setup_ddp()
+        device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+        set_seed(cfg.seed + rank)  # 保证多卡 determinism
+    else:
+        rank = 0
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        set_seed(cfg.seed)
 
-    if rank == 0 and cfg.wandb.mode != "disabled":
+    if (not args.ddp or rank == 0) and cfg.wandb.mode != "disabled":
         wandb.init(project=cfg.wandb.project,
                    name=cfg.name,
                    mode=cfg.wandb.mode,
@@ -93,49 +100,104 @@ def main():
                          tree_dim=cfg.tree_dim,
                          dna_dim=cfg.dna_dim,
                          output_dict=True).to(device)
-    model = DDP(model, device_ids=[rank])
+    
+    # 根据参数决定是否使用 DDP
+    if args.ddp:
+        model = DDP(model, device_ids=[rank])
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.wd)
-    scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs, eta_min=cfg.lr * 0.01)
+    base_lr   = cfg.lr              # 例如 5e-4
+    logit_lr  = base_lr * 0.1       # 5e-5
+
+    other_params  = [p for n, p in model.named_parameters()
+                    if n != "logit_scale"]
+
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": other_params,           "lr": base_lr},
+            {"params": [model.logit_scale],    "lr": logit_lr}
+        ],
+        weight_decay=cfg.wd
+    )
+
+    # === ② 学习率调度器照常对两个 group 都生效 ===
+    total_steps  = len(train_loader) * cfg.epochs
+    warmup_steps = len(train_loader) * cfg.warmup_epochs
+
+    def lr_lambda(step):
+        if step < warmup_steps:
+            return step / max(1, warmup_steps)
+        return 0.5 * (1 + torch.cos(torch.pi *
+                    (step - warmup_steps) / (total_steps - warmup_steps)))
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
     scaler = torch.amp.GradScaler(init_scale=2.0) if cfg.precision == "amp" else None
 
     # -------- 训练循环 ------------------------------
-    best_val_loss = float('inf')
-    patience = getattr(cfg, 'patience', 10)  # 早停耐心值，默认10个epoch
+    best_top1 = 0.0
     patience_counter = 0
+    patience = cfg.patience
 
     for epoch in range(cfg.epochs):
-        if dist.is_initialized(): 
+        if args.ddp:
             train_loader.sampler.set_epoch(epoch)
 
-        # 训练一个epoch
-        train_loss = train_one_epoch(model, train_loader, optimizer, epoch,
-                                    device, cfg, scaler)
-        
-        # 验证
-        val_loss = evaluate(model, val_loader, device, cfg)
-        
-        # 学习率调整
+        # 1) 训练
+        train_loss = train_one_epoch(model, train_loader, optimizer,
+                                    epoch, device, cfg, scaler)
+
+        # 2) 验证
+        val_loss, val_metrics = evaluate(model, val_loader, device, cfg)
+
+        if args.ddp:
+            top1_tensor = torch.tensor(
+                [val_metrics["top1"]] if rank == 0 else [0.0],
+                device=device
+            )
+            dist.broadcast(top1_tensor, src=0)
+            top1 = top1_tensor.item()
+        else:
+            top1 = val_metrics["top1"]
+
+        # 3) 学习率
         scheduler.step()
 
-        # 检查是否是最佳模型
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # 4) ─── 保存 latest，覆盖写 ───
+        if not args.ddp or rank == 0:
+            save_checkpoint(model, optimizer, scheduler, epoch,
+                            val_metrics, cfg, tag="latest")
+
+        # 5) ─── 保存 best (Top-1 提升) ───
+        if top1 > best_top1 + cfg.min_delta:
+            best_top1 = top1
             patience_counter = 0
-            save_checkpoint(model, optimizer, scheduler, epoch, val_loss, cfg, is_best=True)
+            if not args.ddp or rank == 0:
+                save_checkpoint(model, optimizer, scheduler, epoch,
+                                val_metrics, cfg, tag="best")
         else:
             patience_counter += 1
-            save_checkpoint(model, optimizer, scheduler, epoch, val_loss, cfg, is_best=False)
-            
-            # 早停检查
-            if patience_counter >= patience:
-                if rank == 0:
-                    print(f"[Early Stopping] No improvement for {patience} epochs. Stopping training.")
-                break
 
-    if rank == 0 and cfg.wandb.mode != "disabled":
+        # 6) 早停
+        if patience_counter >= patience:
+            if not args.ddp or rank == 0:
+                print(f"[EarlyStop] Top-1 连续 {patience} 轮无提升，停止训练。")
+            break
+
+        # 7) wandb 记录（仅 rank0）
+        if (not args.ddp or rank == 0) and wandb.run is not None:
+            wandb.log({
+                "epoch":        epoch,
+                "train/loss":   train_loss,
+                "val/loss":     val_loss,
+                "val/top1":     top1,
+                "val/recall@5": val_metrics["recall@5"],
+                "val/mrr":      val_metrics["mrr"],
+            })
+
+    if (not args.ddp or rank == 0) and cfg.wandb.mode != "disabled":
         wandb.finish()
-    dist.destroy_process_group()
+    
+    if args.ddp:
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":

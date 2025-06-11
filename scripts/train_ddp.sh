@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 设置 CUDA 可见设备（根据实际 GPU 数量调整）
-export CUDA_VISIBLE_DEVICES=1,2,3
+export CUDA_VISIBLE_DEVICES=0,2
 
 # 设置 NCCL 调试信息（可选）
 export NCCL_DEBUG=INFO
@@ -15,13 +15,9 @@ CONFIG="gutclip/configs/default.yaml"
 
 # 启动分布式训练
 torchrun \
-    --nproc_per_node=3 \
+    --nproc_per_node=2 \
     --master_port=29500 \
     gutclip/cmdline/main.py \
     --cfg "${CONFIG}" \
-    "wandb.mode=online"
+    "wandb.mode=offline"
 
-# 训练完成后，将最佳模型复制到指定位置
-if [ -f "checkpoints/${NAME}_best.pt" ]; then
-    cp "checkpoints/${NAME}_best.pt" "checkpoints/${NAME}_final.pt"
-fi

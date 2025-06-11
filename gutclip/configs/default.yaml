@@ -10,13 +10,14 @@ seed: 42
 epochs: 500              # 总训练轮数
 patience: 200           # 早停耐心值
 min_delta: 0.001        # 最小改善阈值（验证损失改善超过此值才重置耐心计数器）
-batch_size: 32         # 批次大小
-num_workers: 8         # 数据加载线程数
-lr: 5e-5              # 学习率
-wd: 0.01              # 权重衰减
+batch_size: 16         # 批次大小（单卡训练，可以增大）
+num_workers: 4         # 数据加载线程数
+lr: 1e-4              # 学习率
+wd: 0.001             # 权重衰减
+warmup_epochs: 5      # 预热轮数
 precision: amp         # 训练精度：amp（混合精度）或 fp32（全精度）
 max_grad_norm: 1.0     # 梯度裁剪阈值
-local_loss: false      # 损失计算范围：true=仅同卡，false=跨卡 all-gather
+local_loss: true       # 损失计算范围：true=仅同卡，false=跨卡 all-gather
 log_interval: 50       # 日志打印间隔（批次）
 
 # 模型配置
@@ -26,11 +27,11 @@ embed_dim: 1280        # 嵌入维度
 
 # ----- 数据 --------------------------------------------------
 data:
-  train_meta: /data/home/wudezhi/project/gutclip/datasets/test/train_meta.csv   # 训练集元数据
-  val_meta:  /data/home/wudezhi/project/gutclip/datasets/test/val_meta.csv      # 验证集元数据
+  train_meta: /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/train_meta.csv   # 训练集元数据
+  val_meta:  /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/val_meta.csv      # 验证集元数据
 
-  dna_dir:   /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/dna_embedding_v3    # DNA特征目录
-  tree_dir:  /data/home/wudezhi/project/X-flora/open_clip/src/datasets/user2/tree                # 树结构特征目录
+  dna_dir:   /data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v2   # DNA特征目录
+  tree_dir:  /data/home/wudezhi/project/school/x-meta/datasets/raw/tree           # 树结构特征目录
 
   dna_ext:  .pt        # DNA特征文件扩展名
   tree_ext: .pt        # 树结构特征文件扩展名
@@ -40,4 +41,4 @@ data:
 # ----- wandb -------------------------------------------------
 wandb:
   project: gutclip     # 项目名称
-  mode: online         # 模式：online/offline/disabled
+  mode: offline        # 模式：online/offline/disabled

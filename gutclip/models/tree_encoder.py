@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import MessagePassing, global_mean_pool
+from torch_geometric.nn import MessagePassing, GlobalAttention
 from torch.nn import Linear, SiLU
 
 
@@ -90,39 +90,101 @@ class PhyloEGCL(MessagePassing):
 
 
 class PhyloEGNN(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=64, out_dim=128, num_layers=4):
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, num_layers: int = 3):
         super().__init__()
-        self.input_proj = Linear(input_dim, hidden_dim)
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_layers = num_layers
 
-        # 所有层都允许更新坐标，因为现在梯度链完整
-        self.layers = nn.ModuleList(
-            [PhyloEGCL(hidden_dim) for _ in range(num_layers)]
+        self.input_proj = nn.Linear(input_dim, hidden_dim)
+        self.egnn_layers = nn.ModuleList([
+            PhyloEGCL(hidden_dim)
+            for _ in range(num_layers)
+        ])
+
+        # 更强 attention gate
+        self.pool = GlobalAttention(
+            gate_nn=nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.LayerNorm(hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.15),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.ReLU(),
+                nn.Dropout(0.15),
+                nn.Linear(hidden_dim // 2, 1)
+            )
         )
 
-        self.output_proj = nn.Sequential(
-            nn.ReLU(),
-            Linear(hidden_dim, out_dim)
-        )
+        self.output_proj = nn.Linear(hidden_dim, output_dim)
+        # self.layer_norm = nn.LayerNorm(output_dim)  # 注释掉
+        self._init_weights()
 
-    def forward(self, x, edge_index, coords, batch):
+    def _init_weights(self):
+        nn.init.kaiming_normal_(self.input_proj.weight, mode='fan_out', nonlinearity='relu')
+        nn.init.zeros_(self.input_proj.bias)
+        for layer in self.pool.gate_nn:
+            if isinstance(layer, nn.Linear):
+                nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.zeros_(layer.bias)
+        nn.init.normal_(self.output_proj.weight, mean=0.0, std=0.1)
+        nn.init.zeros_(self.output_proj.bias)
+        # nn.init.ones_(self.layer_norm.weight)  # 注释掉
+        # nn.init.zeros_(self.layer_norm.bias)   # 注释掉
+
+    def forward(self, x: torch.Tensor, pos: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor) -> torch.Tensor:
         x = self.input_proj(x)
-        for layer in self.layers:
-            x, coords = layer(x, edge_index, coords)
-            x = F.layer_norm(x, x.shape[-1:])               # 轻量 LN
-        # 使用 global_mean_pool 而不是 mean，以保持批次维度
-        out = self.output_proj(global_mean_pool(x, batch))
-        return F.normalize(out, p=2, dim=-1)
+        for layer in self.egnn_layers:
+            x, pos = layer(x, edge_index, pos)
+
+        # batch_size = batch.max().item() + 1
+        # for b in range(batch_size):
+        #     mask = (batch == b)
+        #     if mask.sum() > 1:
+        #         batch_x = x_norm[mask]
+        #         cos_sim = torch.mm(batch_x, batch_x.t())
+        #         print(f"[Debug] Before pooling - Batch {b} node-level cosine similarity matrix:\n{cos_sim.detach().cpu().numpy()}")
+        #         print(f"[Debug] Before pooling - Batch {b} node-level std: {x[mask].std(dim=0).mean().item():.4f}")
+
+        # pooling
+        pooled_out = self.pool(x, batch)
+
+        # pooling后分布分析
+        # x_norm = F.normalize(pooled_out, p=2, dim=-1)
+        # cos_sim = torch.mm(x_norm, x_norm.t())
+        # print(f"[Debug] After pooling - Batch-level cosine similarity matrix:\n{cos_sim.detach().cpu().numpy()}")
+        # print(f"[Debug] After pooling - Batch-level std: {pooled_out.std(dim=0).mean().item():.4f}")
+
+        x = self.output_proj(pooled_out)
+        # x = self.layer_norm(x)  # 注释掉
+        return x
+
 
 
 class TreeEncoder(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=128, out_dim=256, num_layers=4):
+    def __init__(self, input_dim=6, hidden_dim=128, out_dim=256, num_layers=4, dropout_rate=0.1):
+        """
+        Args:
+            input_dim: Number of input features (default=6 for [quant_abundance, is_present, log_abundance, depth, parent_abundance, sibling_mean])
+            hidden_dim: Hidden dimension size
+            out_dim: Output dimension size
+            num_layers: Number of EGNN layers
+            dropout_rate: Dropout rate for feature dropout
+        """
         super().__init__()
         self.egnn = PhyloEGNN(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
-            out_dim=out_dim,
+            output_dim=out_dim,
             num_layers=num_layers
         )
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, x, edge_index, pos, batch):
-        return self.egnn(x, edge_index, pos, batch)
+        # 训练时添加微噪声
+        
+        # Apply dropout to input features during training
+            
+        x = self.egnn(x, pos, edge_index, batch)
+        return x

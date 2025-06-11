@@ -206,3 +206,7 @@ class Graph:
                 j += 1
             current = next_nodes
         return m
+    def get_node_by_id(self, node_id):
+        # node_id 可以为 str 或非str
+        sid = str(node_id)
+        return self.NODE_DICT.get(sid, None)

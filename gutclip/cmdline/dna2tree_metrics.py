@@ -96,7 +96,7 @@ def build_or_load_tree_emb(dataset_dir: Path, ckpt: Path, device: str, fp16: boo
 
     # 2. 加载数据集和模型
     dataset = TreeEGNNDataset(str(dataset_dir))
-    model = GutCLIPModel(embed_dim=EMBED_DIM, tree_dim=TREE_DIM, dna_dim=DNA_DIM)
+    model = GutCLIPModel(tree_dim=TREE_DIM, dna_dim=DNA_DIM)
     
     # 3. 加载权重
     ckpt_data = torch.load(ckpt, map_location="cpu", weights_only=True)
@@ -204,7 +204,7 @@ def main():
             k = k[len("module."):]
         clean_state[k] = v
     
-    model = GutCLIPModel(embed_dim=EMBED_DIM, tree_dim=TREE_DIM, dna_dim=DNA_DIM)
+    model = GutCLIPModel(tree_dim=TREE_DIM, dna_dim=DNA_DIM)
     model.load_state_dict(clean_state)
     model.eval().to(args.device)
     

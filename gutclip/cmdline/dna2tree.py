@@ -123,7 +123,7 @@ def main():
         clean_state[k] = v
 
     # ---------- 3. 创建模型 (参数要和训练一致) ----------
-    model = GutCLIPModel(embed_dim=1280, tree_dim=256, dna_dim=768)
+    model = GutCLIPModel(tree_dim=256, dna_dim=768)
 
     # ---------- 4. 加载 ----------
     missing, unexpected = model.load_state_dict(clean_state)

@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 
 from .dna_dataset      import DNABERTEmbeddingDataset
 from .tree_dataset import TreeEGNNDataset
+from .split_dataset import TreeSplitDataset
 from .gut_dataset      import GutCLIPDataset, gutclip_collate_fn
 
 
@@ -18,8 +19,15 @@ class GutDataModule:
         self.cfg = cfg
         self.data_cfg = cfg.data
 
-        # -------- 共享 TreeEGNNDataset ------------------------
-        self.tree_ds = TreeEGNNDataset(dataset_dir=self.data_cfg.tree_dir)
+        # -------- 共享 TreeEGNNDataset（支持两种模式） ------------------------
+        if hasattr(self.data_cfg, 'type') and self.data_cfg.type == "split":
+            # 使用拆分模式
+            print(f"[INFO] Using split dataset mode")
+            self.tree_ds = TreeSplitDataset(root_dir=self.data_cfg.tree_dir)
+        else:
+            # 使用原始pkl模式
+            print(f"[WARN] Loading 17 GB pkl; this will be slow!")
+            self.tree_ds = TreeEGNNDataset(dataset_dir=self.data_cfg.tree_dir)
 
         # -------- DNA train / val -----------------------------
         self.train_dna = DNABERTEmbeddingDataset(

@@ -88,8 +88,8 @@ class TreeEGNNDataset(Dataset):
 
         if not force_reprocess and os.path.exists(self.pickle_path) and os.path.exists(self.meta_path):
             print(f"[INFO] Loading cached dataset and metadata from {self.pickle_path}")
-            self.all_data = torch.load(self.pickle_path)
-            metadata = torch.load(self.meta_path)
+            self.all_data = torch.load(self.pickle_path, map_location='cpu')
+            metadata = torch.load(self.meta_path, map_location='cpu')
             self.sample_ids = metadata['sample_ids']
             self.sample_id_to_idx = metadata['sample_id_to_idx']
             print(f"[INFO] Loaded {len(self.all_data)} tree samples")

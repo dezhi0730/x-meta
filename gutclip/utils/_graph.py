@@ -50,6 +50,34 @@ class Node:
             else:
                 stack.extend(node.children)
         return count
+    def __getstate__(self):
+        return {
+            "id": self.id,
+            "abun": self.abundance,
+            "parent": self.parent.id if self.parent else None,
+            "children": [c.id for c in self.children]
+        }
+    def __setstate__(self, state):
+        self.__init__(state["id"])
+        self.abundance = state["abun"]
+
+    def __getstate__(self):
+        """只保存必要字段，避免循环引用"""
+        return {
+            "id": self.id,
+            "abun": self.abundance,
+            "layer": self.layer,
+            "parent": self.parent.id if self.parent else None,
+            "children": [c.id for c in self.children]
+        }
+
+    def __setstate__(self, state):
+        """从序列化状态恢复节点"""
+        self.id = state["id"]
+        self.abundance = state["abun"]
+        self.layer = state["layer"]
+        self.parent = None  # 临时设为None，稍后重新链接
+        self.children = []  # 临时设为空，稍后重新链接
 
 
 class Graph:
@@ -210,3 +238,48 @@ class Graph:
         # node_id 可以为 str 或非str
         sid = str(node_id)
         return self.NODE_DICT.get(sid, None)
+
+    def __getstate__(self):
+        """序列化Graph对象"""
+        return {
+            "nodes": [n.__getstate__() for n in self.NODE_DICT.values()],
+            "root_id": self.root.id if self.root else None,
+            "layers": self.layers,
+            "width": self.width,
+            "node_count": self.node_count
+        }
+
+    def __setstate__(self, state):
+        """从序列化状态恢复Graph对象"""
+        self.layers = state["layers"]
+        self.width = state["width"]
+        self.node_count = state["node_count"]
+        self.NODE_DICT = {}
+        self.nodes = []
+        
+        # 先创建所有节点
+        for nd in state["nodes"]:
+            node = Node(nd["id"])
+            node.__setstate__(nd)
+            self.NODE_DICT[nd["id"]] = node
+            
+        # 重新构建nodes列表结构
+        for layer in range(self.layers):
+            self.nodes.append({})
+        for node in self.NODE_DICT.values():
+            layer = node.get_layer()
+            if layer < len(self.nodes):
+                self.nodes[layer][node] = node
+                
+        # 重新链接父子关系
+        for nd in state["nodes"]:
+            node = self.NODE_DICT[nd["id"]]
+            if nd["parent"] is not None:
+                node.parent = self.NODE_DICT[nd["parent"]]
+            node.children = [self.NODE_DICT[cid] for cid in nd["children"]]
+            
+        # 设置根节点
+        if state["root_id"] is not None:
+            self.root = self.NODE_DICT[state["root_id"]]
+        else:
+            self.root = None

@@ -1,108 +1,89 @@
-# gutclip/loss/clip_loss.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 
-__all__ = ["CLIPLoss"]
 
+# ----------------------- 工具 -----------------------
+def _world_gather(t: torch.Tensor) -> torch.Tensor:
+    """DDP 下把各卡 tensor 拼在一起；单卡时直接返回"""
+    if dist.is_initialized() and dist.get_world_size() > 1:
+        bufs = [torch.zeros_like(t) for _ in range(dist.get_world_size())]
+        dist.all_gather(bufs, t)
+        t = torch.cat(bufs, 0)
+    return t
+
+
+def _variance_reg(z: torch.Tensor, gamma: float = 1.0) -> torch.Tensor:
+    """CLIP 官方 VIT-B/32 的做法——压低协方差 collapse"""
+    std = z.std(dim=0) + 1e-4
+    return F.relu(gamma - std).mean()
+
+
+# ======================= 主损失 =======================
 class CLIPLoss(nn.Module):
     """
-    InfoNCE / CLIP style loss with learnable logit_scale.
-    model.forward() 需返回 dict:
-        {'tree_emb': (B, D), 'dna_emb': (B, D), 'logit_scale': scalar tensor}
+    Ⅱ. 对称 InfoNCE   +   Ⅲ. feature variance 正则
+    tips:
+      • 支持 out_dict 里手动传入 'manual_sim'（例如加 margin 时）
+      • τ 由模型传进来；内部再做一次 clip，确保 exp(τ) 不炸
     """
-    def __init__(self, local_loss=False, gamma=1.0):
+    def __init__(self,
+                 local_loss: bool = False,
+                 gamma: float = 1.0,
+                 var_weight: float = 0.05):            # ← 记得把权重降一点
         super().__init__()
-        self.local_loss = local_loss        # True: 仅同卡配对；False: 全局配对
-        self.gamma = gamma  # 方差阈值，提高到 1.0
+        self.local_loss = local_loss
+        self.gamma      = gamma
+        self.var_w      = var_weight
 
-    @staticmethod
-    def _gather_with_grad(tensor):
-        world = dist.get_world_size()
-        if world == 1:
-            return tensor
-        tensors = [torch.zeros_like(tensor) for _ in range(world)]
-        dist.all_gather(tensors, tensor)
-        return torch.cat(tensors, 0)
+    # ------------------- 前向 -------------------
+    def forward(self, out: dict):
+        z_tree, z_dna = out["tree_emb"], out["dna_emb"]
+        tau           = out["logit_scale"].clamp(0, 4.6052)   # ln(100)
 
-    def _variance_loss(self, z):
-        """计算方差正则化损失
-        Args:
-            z: (B, D) 已 L2-norm 的特征
-        Returns:
-            float: 方差惩罚项
-        """
-        std = z.std(dim=0) + 1e-4          # (D,)
-        penalty = F.relu(self.gamma - std).mean()
-        return penalty
-
-    def forward(self, output):
-        """
-        Args:
-            output: dict containing:
-                - tree_emb: (B, D) 树结构特征
-                - dna_emb: (B, D) DNA特征
-                - logit_scale: raw parameter (not exp'd)
-        """
-        # 1. 特征已经归一化，直接使用
-        tree_features = output["tree_emb"]
-        dna_features = output["dna_emb"]
-        
-        # 2. 计算相似度矩阵
-        logits = torch.matmul(tree_features, dna_features.t())  # (N, N)
-        
-        # 3. 应用 logit_scale（只 exp 一次）
-        logit_scale = output["logit_scale"].clamp(-5, 5)  # 限制 log 温度范围
-        logits = logits * logit_scale.exp()  # 只 exp 一次
-        
-        # 4. 生成标签
-        N = tree_features.size(0)
-        if self.local_loss:
-            labels = torch.arange(N, device=tree_features.device)
+        # ① 相似度矩阵
+        sim = out.get("manual_sim")         # 给 MarginCLIP 用
+        if sim is None:
+            if self.local_loss:             # 单机 / 本地负样本
+                sim = z_tree @ z_dna.T
+                labels = torch.arange(sim.size(0), device=sim.device)
+            else:                           # 多机：all-gather 全局负样本
+                sim   = z_tree @ _world_gather(z_dna).T
+                rank  = dist.get_rank() if dist.is_initialized() else 0
+                bs    = z_tree.size(0)
+                labels = torch.arange(bs, device=sim.device) + rank * bs
         else:
-            # 确保标签在分布式训练中是连续的
-            if dist.is_initialized():
-                rank = dist.get_rank()
-                world_size = dist.get_world_size()
-                labels = torch.arange(N, device=tree_features.device) + rank * N
-            else:
-                labels = torch.arange(N, device=tree_features.device)
-        
-        # 5. 计算损失
-        loss = (F.cross_entropy(logits, labels) + 
-                F.cross_entropy(logits.t(), labels)) / 2
+            labels = torch.arange(sim.size(0), device=sim.device)   # 已经是 (B,B)
 
-        # 6. 打印详细的调试信息
-        with torch.no_grad():
-            # 计算归一化后的相似度
-            sim = tree_features @ dna_features.t()   # 这两已 L2-norm
-            diag = sim.diag().mean().item()
-            off = (sim.sum() - sim.diag().sum()) / (sim.numel() - sim.size(0))
-            
-            # 计算特征统计量
-            tree_std = tree_features.std(dim=0).mean().item()
-            dna_std = dna_features.std(dim=0).mean().item()
-            
-            # 计算logits统计量
-            logits_std = logits.std().item()
-            logits_mean = logits.mean().item()
-            
-            print(f"[Debug] tree_std={tree_std:.4f} dna_std={dna_std:.4f}")
-            print(f"[Debug] logits_mean={logits_mean:.4f} logits_std={logits_std:.4f}")
-            print(f"[Cos] diag={diag:.4f} off={off:.4f} Δ={(diag-off):.4f}")
-        
-        # 7. 计算方差正则化损失
-        var_loss = 0.2 * (  # 权重从 0.05 提高到 0.2
-            self._variance_loss(tree_features) +
-            self._variance_loss(dna_features)
-        )
+        # ② InfoNCE
+        logits = sim * tau.exp()
+        loss_i2t = F.cross_entropy(logits,     labels)
+        loss_t2i = F.cross_entropy(logits.T,   labels)
+        clip_loss = 0.5 * (loss_i2t + loss_t2i)
 
-        # 8. 总损失
-        loss += var_loss
+        # ③ variance regularization
+        var_loss = self.var_w * (_variance_reg(z_tree, self.gamma) +
+                                 _variance_reg(z_dna , self.gamma))
 
-        # 9. 打印调试信息
-        if not dist.is_initialized() or dist.get_rank() == 0:
-            print(f"[Debug] var_loss={var_loss.item():.4f}, logit_scale={logit_scale.item():.4f}")
+        return clip_loss + var_loss
 
-        return loss
+
+# ======================= 带 Margin 的包装器 =======================
+class MarginCLIPLoss(nn.Module):
+    """
+    additive margin：对角线 sim 减 m，再丢给上面的 CLIPLoss
+    """
+    def __init__(self,
+                 margin: float = 0.1,
+                 local_loss: bool = False,
+                 gamma: float = 1.0):
+        super().__init__()
+        self.margin   = margin
+        self.clip_loss = CLIPLoss(local_loss=local_loss, gamma=gamma)
+
+    def forward(self, out: dict):
+        sim = out["tree_emb"] @ out["dna_emb"].T
+        sim = sim - torch.eye(sim.size(0), device=sim.device) * self.margin
+        out = {**out, "manual_sim": sim}      # 塞回去
+        return self.clip_loss(out)

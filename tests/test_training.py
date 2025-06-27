@@ -31,12 +31,7 @@ def test_model_forward(cfg, device):
     batch = batch.to(device)  # PyG Batch 对象可以直接移到设备上
     
     # 创建模型
-    model = GutCLIPModel(
-        embed_dim=cfg.embed_dim,
-        tree_dim=cfg.tree_dim,
-        dna_dim=cfg.dna_dim,
-        output_dict=True
-    ).to(device)
+    model = GutCLIPModel(tree_dim=cfg.tree_dim, dna_dim=cfg.dna_dim, output_dict=True).to(device)
     
     # 前向传播
     out = model(batch)
@@ -61,12 +56,7 @@ def test_loss_computation(cfg, device):
     batch = batch.to(device)
     
     # 创建模型
-    model = GutCLIPModel(
-        embed_dim=cfg.embed_dim,
-        tree_dim=cfg.tree_dim,
-        dna_dim=cfg.dna_dim,
-        output_dict=True
-    ).to(device)
+    model = GutCLIPModel(tree_dim=cfg.tree_dim, dna_dim=cfg.dna_dim, output_dict=True).to(device)
     
     # 前向传播
     out = model(batch)
@@ -93,12 +83,7 @@ def test_backprop(cfg, device):
     batch = batch.to(device)
     
     # 创建模型和优化器
-    model = GutCLIPModel(
-        embed_dim=cfg.embed_dim,
-        tree_dim=cfg.tree_dim,
-        dna_dim=cfg.dna_dim,
-        output_dict=True
-    ).to(device)
+    model = GutCLIPModel(tree_dim=cfg.tree_dim, dna_dim=cfg.dna_dim, output_dict=True).to(device)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     
@@ -129,12 +114,7 @@ def test_training_loop(cfg, device):
     val_loader = dm.val_dataloader()
     
     # 创建模型和优化器
-    model = GutCLIPModel(
-        embed_dim=cfg.embed_dim,
-        tree_dim=cfg.tree_dim,
-        dna_dim=cfg.dna_dim,
-        output_dict=True
-    ).to(device)
+    model = GutCLIPModel(tree_dim=cfg.tree_dim, dna_dim=cfg.dna_dim, output_dict=True).to(device)
     
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     # 修复 GradScaler 警告

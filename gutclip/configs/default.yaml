@@ -1,47 +1,57 @@
 # gutclip/configs/default.yaml
-# -----------------------------------------------------------
-# 训练 & 数据 & wandb 的默认配置
-# 注意：这些参数可以通过 train_ddp.sh 中的 OVERRIDE_PARAMS 覆盖
-# -----------------------------------------------------------
+# ============================================================
 name: gutclip_exp
 seed: 42
 
-# 训练参数
-epochs: 500              # 总训练轮数
-patience: 200           # 早停耐心值
-min_delta: 0.001        # 最小改善阈值（验证损失改善超过此值才重置耐心计数器）
-batch_size: 64         # 批次大小（单卡训练，可以增大）
-num_workers: 4         # 数据加载线程数
-lr: 1e-4              # 学习率
-wd: 0.001             # 权重衰减
-warmup_epochs: 5      # 预热轮数
-precision: amp         # 训练精度：amp（混合精度）或 fp32（全精度）
-max_grad_norm: 1.0     # 梯度裁剪阈值
-local_loss: true       # 损失计算范围：true=仅同卡，false=跨卡 all-gather
-log_interval: 50       # 日志打印间隔（批次）
+# -------- 训练超参 ------------------------------------------
+epochs: 500
+patience: 200
+min_delta: 0.001
+batch_size: 32
+num_workers: 4
+lr: 1e-4
+wd: 0.001
+warmup_epochs: 5
+precision: amp          # amp / fp32
+max_grad_norm: 1.0
+local_loss: true        # true=单卡，false=跨卡 gather
+log_interval: 50
 
-# 模型配置
-tree_dim: 256          # 树结构特征维度
-dna_dim: 768           # DNA特征维度
-embed_dim: 1280        # 嵌入维度
+# -------- 方差正则 (三项中的第③) -----------------------------
+var_gamma: 1.0          # γ，下限
+var_weight: 0.01        # λ，正则权重
 
-# ----- 数据 --------------------------------------------------
+# -------- 模型维度 ------------------------------------------
+tree_dim: 256
+dna_dim: 768
+embed_dim: 1280
+
+# -------- 稀疏感知专属 (三项中的第②) ------------------------
+sparse:
+  zero_weight_init: 0.5     # 可学习 zero_weight 的初值 (0~1)
+  detection_threshold: 0.0  # <阈值 视为 0 丰度
+  augment_ratio: 0.1        # 如需用到的数据增强占比
+
+# -------- 数据路径 ------------------------------------------
 data:
-  # 数据集类型：pkl (原始) 或 split (拆分)
   type: split
-  
   train_meta: /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/train_meta.csv   # 训练集元数据
   val_meta:  /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/val_meta.csv      # 验证集元数据
 
-  dna_dir:   /data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v2   # DNA特征目录
-  tree_dir:  /data/home/wudezhi/project/school/x-meta/datasets/raw/tree           # 树结构特征目录
-  
-  dna_ext:  .pt        # DNA特征文件扩展名
-  tree_ext: .pt        # 树结构特征文件扩展名
+  dna_dir:   /data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v2
+  tree_dir:  /data/home/wudezhi/project/school/x-meta/datasets/raw/tree     
 
-  max_genes: 1024      # 最大基因数量
+  dna_ext:  .pt
+  tree_ext: .pt
 
-# ----- wandb -------------------------------------------------
+  max_genes: 1024
+  augment:
+    enable: true
+    edge_drop: 0.1
+    feat_noise: 0.1
+    coord_noise: 0.01
+
+# -------- wandb ---------------------------------------------
 wandb:
-  project: gutclip     # 项目名称
-  mode: offline        # 模式：online/offline/disabled
+  project: gutclip
+  mode: offline            # online / offline / disabled

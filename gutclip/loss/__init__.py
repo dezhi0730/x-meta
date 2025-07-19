@@ -1,6 +1,6 @@
-from .clip_loss import CLIPLoss, MarginCLIPLoss
+from .clip_loss import SparseCLIPLoss,add_loss_params_to_optimizer
 
 __all__ = [
-    "CLIPLoss",
-    "MarginCLIPLoss"
+    "SparseCLIPLoss",
+    "add_loss_params_to_optimizer"
     ]

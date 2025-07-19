@@ -1,4 +1,3 @@
-# gutclip/data/_data_module.py
 from __future__ import annotations
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
@@ -10,11 +9,6 @@ from .gut_dataset      import GutCLIPDataset, gutclip_collate_fn
 
 
 class GutDataModule:
-    """
-    * DNA train/val 拆分
-    * TreeEGNNDataset 只实例化一次共用
-    * 只保留同时有 DNA 和树的样本
-    """
     def __init__(self, cfg):
         self.cfg = cfg
         self.data_cfg = cfg.data

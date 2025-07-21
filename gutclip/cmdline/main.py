@@ -9,6 +9,8 @@ from omegaconf import OmegaConf
 from pathlib import Path
 import wandb
 from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+from typing import Union   
 
 from gutclip.utils.seed  import set_seed
 from gutclip.data        import GutDataModule
@@ -41,17 +43,35 @@ def setup_ddp():
         dist.init_process_group("gloo", rank=0, world_size=1); rank=0
     return rank
 # -----------------------------------------------------------
-def save_ckpt(model, opt, sch, epoch, metrics, cfg, tag):
-    if dist.is_initialized() and dist.get_rank()!=0: return
+def save_ckpt(model, opt, sch, epoch, metrics, cfg, tag,
+              return_path: bool = False) -> Union[Path, None]:
+    if dist.is_initialized() and dist.get_rank() != 0:
+        return None
+
     p = Path("checkpoints"); p.mkdir(exist_ok=True)
+
+    if tag == "latest":
+        fname = f"{cfg.name}_latest.pt"
+    else:
+        date_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+        metric_suffix = (
+            "_" + "_".join(f"{k}{metrics[k]:.4f}"
+                           for k in ("top1","recall@5","mrr")
+                           if metrics and k in metrics and metrics[k] is not None)
+        ) if metrics else ""
+        fname = f"{cfg.name}_{tag}_{date_str}{metric_suffix}.pt"
+
+    fpath = p / fname
     torch.save({
-        "epoch": epoch+1,
-        "model": (model.module if isinstance(model,DDP) else model).state_dict(),
+        "epoch": epoch + 1,
+        "model": (model.module if isinstance(model, DDP) else model).state_dict(),
         "optimizer": opt.state_dict(),
         "scheduler": sch.state_dict(),
         "cfg": OmegaConf.to_container(cfg, resolve=True),
         "metrics": metrics
-    }, p/f"{cfg.name}_{tag}.pt")
+    }, fpath)
+
+    return fpath if return_path else None
 # -----------------------------------------------------------
 def main():
     args = parse_args(); cfg = load_cfg(args.cfg, args.opts)
@@ -97,6 +117,7 @@ def main():
     scaler = GradScaler() if cfg.precision=="amp" else None
 
     best_top1, patience = 0.0,0; global_step=0
+    best_ckpt_path   = None 
     for ep in range(cfg.epochs):
         if use_ddp: train_loader.sampler.set_epoch(ep)
         train_one_epoch(model, train_loader, optimizer,
@@ -115,7 +136,12 @@ def main():
             save_ckpt(model, optimizer, scheduler, ep, metrics, cfg, "latest")
             if top1 > best_top1 + cfg.min_delta:
                 best_top1, patience = top1,0
-                save_ckpt(model, optimizer, scheduler, ep, metrics, cfg, "best")
+                if best_ckpt_path and best_ckpt_path.exists():
+                    best_ckpt_path.unlink(missing_ok=True)
+                best_ckpt_path = save_ckpt(
+                    model, optimizer, scheduler, ep, metrics, cfg, "best",
+                    return_path=True             
+                )
         else:
             patience += 1
 

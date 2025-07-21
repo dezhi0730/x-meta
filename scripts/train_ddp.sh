@@ -27,6 +27,5 @@ torchrun \
     --master_port=29510 \
     gutclip/cmdline/main.py \
     --cfg "${CONFIG}" \
-    "data.type=split" \
     "wandb.mode=offline"
 

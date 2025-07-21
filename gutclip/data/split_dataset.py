@@ -169,7 +169,7 @@ class TreeSplitDataset(Dataset):
 
     def __getitem__(self, idx):
         rec     = self.records[idx]        # {"sid": ..., "path": ...}
-        obj     = torch.load(os.path.join(self.split_dir, rec["path"]), map_location="cpu")
+        obj     = torch.load(os.path.join(self.split_dir, rec["path"]), map_location="cpu",weights_only=True)
 
         data = Data(
             x          = torch.tensor(obj["x"],          dtype=torch.float),

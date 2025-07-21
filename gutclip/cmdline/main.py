@@ -84,7 +84,8 @@ def main():
 
     optimizer = add_loss_params_to_optimizer(model, criterion,
                                              base_lr=cfg.lr,
-                                             weight_decay=cfg.wd)
+                                             weight_decay=cfg.wd,
+                                             logit_lr_factor=cfg.logit_lr_factor)
 
     steps_total  = len(train_loader)*cfg.epochs
     steps_warmup = len(train_loader)*cfg.warmup_epochs

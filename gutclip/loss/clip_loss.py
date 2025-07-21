@@ -106,7 +106,11 @@ class SparseCLIPLoss(nn.Module):
         """
         z_t = out["tree_emb"]          # (B,D)
         z_d = out["dna_emb"]           # (B,D)
-        logit_scale = out["logit_scale"].clamp_(0, math.log(100.0))
+        # logit_scale = out["logit_scale"].clamp_(0, math.log(100.0))
+        LOGIT_MAX = math.log(20.0)         
+        logit_scale_raw = out["logit_scale"]  
+        logit_scale = logit_scale_raw.clamp(0.0, LOGIT_MAX)
+
 
         assert torch.isfinite(z_t).all(), "[NaN] tree_emb (input to loss)"
         assert torch.isfinite(z_d).all(), "[NaN] dna_emb  (input to loss)"
@@ -167,6 +171,9 @@ class SparseCLIPLoss(nn.Module):
         var_loss = _variance_reg(z_t, self.var_gamma, self.var_weight) + \
                    _variance_reg(z_d, self.var_gamma, self.var_weight)
 
+        self.last_clip_loss = clip_loss          # ★ 新增
+        self.last_var_loss  = var_loss
+
         return clip_loss + var_loss
 
 
@@ -174,12 +181,24 @@ class SparseCLIPLoss(nn.Module):
 # 2. 工具：创建优化器时把 loss 参数加入
 # ------------------------------------------------------------------
 def add_loss_params_to_optimizer(model: nn.Module,
-                                 loss_fn: nn.Module,
-                                 base_lr: float = 1e-4,
-                                 weight_decay: float = 1e-2
-                                 ) -> torch.optim.Optimizer:
-    """
-    返回包含模型 + 损失可学习参数的 AdamW Optimizer
-    """
-    params = list(model.parameters()) + list(loss_fn.parameters())
-    return torch.optim.AdamW(params, lr=base_lr, weight_decay=weight_decay)
+                                 criterion: nn.Module,
+                                 base_lr: float,
+                                 weight_decay: float = 0.0,
+                                 logit_lr_factor: float = 0.05):
+    other_params   = []
+    logit_params   = []
+    for n, p in model.named_parameters():
+        if not p.requires_grad: continue
+        if n.endswith("logit_scale"):
+            logit_params.append(p)
+        else:
+            other_params.append(p)
+
+    loss_params = [p for p in criterion.parameters() if p.requires_grad]
+
+    param_groups = [
+        {"params": other_params,        "lr": base_lr},
+        {"params": logit_params,        "lr": base_lr * logit_lr_factor},
+        {"params": loss_params,         "lr": base_lr},
+    ]
+    return torch.optim.AdamW(param_groups, weight_decay=weight_decay)

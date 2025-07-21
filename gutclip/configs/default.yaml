@@ -11,6 +11,7 @@ batch_size: 32
 num_workers: 4
 lr: 1e-4
 wd: 0.001
+logit_lr_factor: 0.05
 warmup_epochs: 5
 precision: amp          # amp / fp32
 max_grad_norm: 1.0
@@ -21,6 +22,7 @@ log_interval: 50
 var_gamma: 1.0          # γ，下限
 var_weight: 0.01        # λ，正则权重
 
+
 # -------- 模型维度 ------------------------------------------
 tree_dim: 256
 dna_dim: 768
@@ -28,7 +30,7 @@ embed_dim: 1280
 
 # -------- 稀疏感知专属 (三项中的第②) ------------------------
 sparse:
-  zero_weight_init: 0.5     # 可学习 zero_weight 的初值 (0~1)
+  zero_weight_init: 0.9     # 可学习 zero_weight 的初值 (0~1)
   detection_threshold: 0.0  # <阈值 视为 0 丰度
   augment_ratio: 0.1        # 如需用到的数据增强占比
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 设置 CUDA 可见设备（根据实际 GPU 数量调整）
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,2
 
 # 设置 NCCL 调试信息（可选）
 export NCCL_DEBUG=INFO

@@ -4,10 +4,10 @@ name: gutclip_exp
 seed: 42
 
 # -------- 训练超参 ------------------------------------------
-epochs: 500
+epochs: 1000
 patience: 200
 min_delta: 0.001
-batch_size: 32
+batch_size: 128
 num_workers: 4
 lr: 1e-4
 wd: 0.001
@@ -37,10 +37,10 @@ sparse:
 # -------- 数据路径 ------------------------------------------
 data:
   type: split
-  train_meta: /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/train_meta.csv   # 训练集元数据
-  val_meta:  /data/home/wudezhi/project/school/x-meta/datasets/V2_14877/val_meta.csv      # 验证集元数据
+  train_meta: /data/home/wudezhi/project/school/x-meta/datasets/V3_34806/train_meta.csv   # 训练集元数据
+  val_meta:  /data/home/wudezhi/project/school/x-meta/datasets/V3_34806/val_meta.csv      # 验证集元数据
 
-  dna_dir:   /data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v2
+  dna_dir:   /data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v3
   tree_dir:  /data/home/wudezhi/project/school/x-meta/datasets/raw/tree     
 
   dna_ext:  .pt

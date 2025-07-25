@@ -10,7 +10,8 @@ from pathlib import Path
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-from typing import Union   
+from typing import Union
+import math
 
 from gutclip.utils.seed  import set_seed
 from gutclip.data        import GutDataModule
@@ -112,7 +113,7 @@ def main():
     scheduler = LambdaLR(
         optimizer,
         lambda s: s/steps_warmup if s<steps_warmup else
-                  0.5*(1+torch.cos(torch.pi*(s-steps_warmup)/(steps_total-steps_warmup)))
+                  0.5*(1+math.cos(math.pi*(s-steps_warmup)/(steps_total-steps_warmup)))
     )
     scaler = GradScaler() if cfg.precision=="amp" else None
 

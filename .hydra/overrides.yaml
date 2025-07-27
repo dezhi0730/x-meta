@@ -1,0 +1,6 @@
+- run_name=gutclip_diff_20250727-164110
+- wandb.mode=offline
+- retrieval.index=datasets/diffusion/V3/faiss_index.faiss
+- retrieval.y=datasets/diffusion/V3/faiss_index.y.npy
+- retrieval.k=5
+- retrieval.ids=datasets/diffusion/V3/faiss_index.ids.npy

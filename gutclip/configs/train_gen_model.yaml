@@ -1,0 +1,51 @@
+defaults:
+  - defaults: default
+  - model: diffusion 
+  - _self_        
+
+run_name: gutclip_diffusion_v1
+seed: 42
+
+data:
+  train_embed_pt: datasets/diffusion/V3/train_embeddings.pt
+  val_embed_pt:   datasets/diffusion/V3/valid_embeddings.pt  
+
+retrieval:
+  index: datasets/diffusion/V3/faiss_index.faiss
+  y:     datasets/diffusion/V3/faiss_index.y.npy
+  # ids 可选（要做 leave-one-out 时用）
+  ids:   datasets/diffusion/V3/faiss_index.ids.npy
+  k: 5
+
+# ── 训练超参 ───────────────────────
+train:
+  epochs:           250
+  batch_size:        128
+  lr:              1e-4
+  weight_decay:    1e-2
+  scheduler_type:  ddpm
+  num_timesteps:   1000
+  warmup_steps:     500
+  grad_clip:       1.0
+  precision:       amp
+  lambda_rank:     0.1
+  log_interval:     50
+  save_ckpt_every:  5000
+  patience:        20
+  min_delta:       1e-6
+
+# ── 数据加载 ───────────────────────
+num_workers: 4
+
+# ── 推断 / 采样 ───────────────────
+sampler:
+  steps:            50
+  guidance_scale: 1.0
+  eta:             0.0
+  temperature:     1.0
+
+# ── 日志 / 监控 ───────────────────
+wandb:
+  project: gutclip
+  mode:     offline
+  notes:    "FiLM-UNet1D + softmax-kNN prior"

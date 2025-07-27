@@ -49,7 +49,7 @@ def save_ckpt(model, opt, sch, epoch, metrics, cfg, tag,
     if dist.is_initialized() and dist.get_rank() != 0:
         return None
 
-    p = Path("checkpoints"); p.mkdir(exist_ok=True)
+    p = Path("checkpoints/gutclip"); p.mkdir(exist_ok=True)
 
     if tag == "latest":
         fname = f"{cfg.name}_latest.pt"

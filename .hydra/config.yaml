@@ -1,0 +1,50 @@
+defaults:
+  hydra:
+    run:
+      dir: .
+    output_subdir: null
+    job:
+      chdir: false
+model:
+  z_dna_dim: 256
+  y_dim: 1000
+  proj_dim: 256
+  cond_dim: ${z_dna_dim}+${proj_dim}
+  base_channels: 128
+  layers_per_block: 2
+  norm_num_groups: 8
+run_name: gutclip_diff_20250727-164110
+seed: 42
+data:
+  train_embed_pt: datasets/diffusion/V3/train_embeddings.pt
+  val_embed_pt: datasets/diffusion/V3/valid_embeddings.pt
+retrieval:
+  index: datasets/diffusion/V3/faiss_index.faiss
+  'y': datasets/diffusion/V3/faiss_index.y.npy
+  ids: datasets/diffusion/V3/faiss_index.ids.npy
+  k: 5
+train:
+  epochs: 250
+  batch_size: 128
+  lr: 0.0001
+  weight_decay: 0.01
+  scheduler_type: ddpm
+  num_timesteps: 1000
+  warmup_steps: 500
+  grad_clip: 1.0
+  precision: amp
+  lambda_rank: 0.1
+  log_interval: 50
+  save_ckpt_every: 5000
+  patience: 20
+  min_delta: 1.0e-06
+num_workers: 4
+sampler:
+  steps: 50
+  guidance_scale: 1.0
+  eta: 0.0
+  temperature: 1.0
+wandb:
+  project: gutclip
+  mode: offline
+  notes: FiLM-UNet1D + softmax-kNN prior

@@ -1,0 +1,7 @@
+z_dna_dim:       256        # DNA embedding dimension
+y_dim:          1000        # 物种数
+proj_dim:       256         # projection dimension for y_prior
+cond_dim:       ${z_dna_dim}+${proj_dim}   # z_dna + proj(y_prior)
+base_channels:  128
+layers_per_block: 2
+norm_num_groups: 8

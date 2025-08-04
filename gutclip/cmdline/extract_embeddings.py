@@ -50,7 +50,7 @@ def main():
     
     # Load dataset using GutDataModule
     dm = GutDataModule(cfg)
-    dataloader = dm.train_dataloader()  # Use training dataloader for inference
+    dataloader = dm.val_dataloader()  # Use training dataloader for inference
     
     # Extract embeddings
     all_tree_embeddings = []

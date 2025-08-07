@@ -1,0 +1,65 @@
+# 带DNA条件的分离建模扩散模型训练配置
+
+name          : separated_diffusion_dna_demo
+seed          : 42
+
+# ---------- data configuration ----------
+data:
+  type: "split"  # 使用split类型
+  tree_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/tree"
+  train_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/train_meta.csv"
+  val_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/val_meta.csv"
+  dna_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v3"
+  dna_ext: ".pt"
+  max_genes: 1024
+
+# ---------- model configuration ----------
+model:
+  hidden_dim: 128
+  out_dim: 256
+  num_layers: 4
+  dropout_rate: 0.25
+
+# ---------- diffusion ----------
+T             : 1000      # training timesteps
+beta_start    : 1.0e-4
+beta_end      : 2.0e-2
+beta_schedule : "linear"  # 使用linear调度器
+rand_mask_prob: 0.20
+keep_min      : 128
+
+# ---------- training ----------
+train:
+  epochs: 200              # 增加训练轮数
+  batch_size: 128         # 减少batch_size，避免内存不足
+  lr: 5.0e-4             # 降低学习率，更稳定
+  weight_decay: 1.0e-4   # 使用wd参数名
+  # warmup_steps: 1000     # 增加预热步数，让学习率有更多时间稳定
+  warmup_ratio: 0.1
+  amp: true
+  use_ema: false          # 暂时关闭EMA，避免模型实例化问题
+  ema_decay: 0.9999
+  
+  # 分离建模参数
+  separated_modeling: true  # 重要：启用分离建模
+  lambda_abun: 4.0         # abundance损失权重
+  lambda_pres: 1.0         # presence损失权重（增加权重，因为presence更难学习）
+  
+  # 学习率调度参数
+  min_lr_ratio: 0.02       # 最低学习率占初始学习率的比例
+
+# ---------- data loading ----------
+num_workers   : 8         # 适中的worker数量，平衡CPU和GPU利用率
+pin_memory    : true      # 启用pin_memory，提高GPU数据传输效率
+prefetch_factor: 2        # 降低预取因子，避免内存问题
+
+# 模型配置
+model_config: "gutclip/configs/model/separated_diffusion.yaml"  # 模型配置文件路径
+
+# DNA配置（启用）
+use_dna: true              # 启用DNA条件
+dna_dim: 768              # DNA嵌入维度
+dna_output_dim: null       # DNA输出维度（null表示自动检测）
+
+# 预训练配置
+pretrained_ckpt: "/data/shared/x-meta/checkpoints/gutclip_exp_best_20250724-090522_top10.5034_recall@50.8152_mrr0.6400.pt" 

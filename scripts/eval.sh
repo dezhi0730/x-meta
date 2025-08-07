@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --test_jsonl)
-            TEST_JSONL="$2"
+            TEST_JSONL="·$2"
             shift 2
             ;;
         --out_dir)

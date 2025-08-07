@@ -1,0 +1,33 @@
+name          : tree_diffusion_demo
+seed          : 42
+
+# ---------- data configuration ----------
+data:
+  type: "split"
+  tree_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/tree"
+  train_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/train_meta.csv"
+  val_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/val_meta.csv"
+  dna_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v3"
+  dna_ext: ".pt"
+  max_genes: 1024
+
+# ---------- diffusion ----------
+T             : 1000      # training timesteps
+beta_start    : 1.0e-4
+beta_end      : 2.0e-2
+rand_mask_prob: 0.20
+keep_min      : 128
+
+# ---------- training ----------
+batch_size    : 128         # 减少batch_size，避免内存不足
+epochs        : 50        # 增加训练轮数
+lr            : 1.0e-3    # 提高学习率
+wd            : 1.0e-4
+amp           : true
+use_ema       : true
+ema_decay     : 0.9999
+warmup_steps  : 1000      # 增加预热步数，让学习率有更多时间稳定
+num_workers   : 8         # 适中的worker数量，平衡CPU和GPU利用率
+pin_memory    : true      # 启用pin_memory，提高GPU数据传输效率
+prefetch_factor: 4        # 增加预取因子，减少GPU等待时间
+separated_modeling: true  # 启用分离建模，匹配TreeNoisePredictor模型

@@ -206,7 +206,8 @@ class VPredLoss(nn.Module):
                  high_center: float = 5.9,
                  high_tau: float = 0.6,
                  lambda_norm: float = 0.50,
-                 lambda_ortho: float = 0.6):
+                 lambda_ortho: float = 0.6,
+                 loss_scale: float = 100.0):  # 添加loss缩放因子，默认100倍
         super().__init__()
         self.lambda_rank = float(lambda_rank)
         self.gamma = float(gamma_min_snr)
@@ -217,6 +218,7 @@ class VPredLoss(nn.Module):
         self.high_tau = float(high_tau)
         self.lambda_norm = float(lambda_norm)
         self.lambda_ortho = float(lambda_ortho)
+        self.loss_scale = float(loss_scale)  # 保存缩放因子
 
     def forward(self,
                 v_pred: torch.Tensor,
@@ -286,7 +288,23 @@ class VPredLoss(nn.Module):
             rank = v_pred.new_tensor(0.0)
 
         total = loss_main + loss_cal + self.lambda_rank * rank
-        return {"total": total, "v_mse": loss_main.detach(), "cal": loss_cal.detach(), "rank": rank.detach()}
+        
+        # 应用缩放因子以便可视化
+        total_scaled = total * self.loss_scale
+        loss_main_scaled = loss_main.detach() * self.loss_scale
+        loss_cal_scaled = loss_cal.detach() * self.loss_scale
+        rank_scaled = rank.detach() * self.loss_scale
+        
+        return {
+            "total": total_scaled, 
+            "v_mse": loss_main_scaled, 
+            "cal": loss_cal_scaled, 
+            "rank": rank_scaled,
+            "total_raw": total,  # 保留原始值用于反向传播
+            "v_mse_raw": loss_main.detach(),
+            "cal_raw": loss_cal.detach(), 
+            "rank_raw": rank.detach()
+        }
 
     @staticmethod
     def _spearman_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -641,7 +659,9 @@ class TrainerDiffusion:
                                + self.lambda_reg * (u_coef ** 2).mean() \
                                + 0.1 * (prior_conf * w_gate).mean()
 
-                loss = loss_dict["total"] + self.lambda_fuse * loss_fuse + loss_reg
+                # 使用原始loss进行反向传播，但记录缩放后的loss
+                loss_raw = loss_dict["total_raw"] + self.lambda_fuse * loss_fuse + loss_reg
+                loss_scaled = loss_dict["total"] + self.lambda_fuse * loss_fuse * self.criterion.loss_scale + loss_reg * self.criterion.loss_scale
 
             # 诊断
             if it == 0:
@@ -654,10 +674,10 @@ class TrainerDiffusion:
                     gate = torch.sigmoid((logsnr - self.high_center) / self.high_tau)
                     print(f"[DBG] gate_high mean={gate.mean():.3f} min={gate.min():.3f} max={gate.max():.3f}")
 
-            # 反传
+            # 反传（使用原始loss）
             self.optim.zero_grad(set_to_none=True)
             if self.scaler.is_enabled():
-                self.scaler.scale(loss).backward()
+                self.scaler.scale(loss_raw).backward()
                 self.scaler.unscale_(self.optim)
                 clip = float(getattr(self.cfg.train, "max_grad_norm", getattr(self.cfg.train, "grad_clip", 0.5)))
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip)
@@ -665,13 +685,14 @@ class TrainerDiffusion:
                 self.scaler.step(self.optim)
                 self.scaler.update()
             else:
-                loss.backward()
+                loss_raw.backward()
                 clip = float(getattr(self.cfg.train, "max_grad_norm", getattr(self.cfg.train, "grad_clip", 0.5)))
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip)
                 torch.nn.utils.clip_grad_norm_(self.head.parameters(), clip)
                 self.optim.step()
 
-            meters["total"] += loss.item() * B
+            # 记录缩放后的loss用于可视化
+            meters["total"] += loss_scaled.item() * B
             meters["v_mse"] += loss_dict["v_mse"].item() * B
             meters["cal"]   += loss_dict["cal"].item() * B
             meters["rank"]  += loss_dict["rank"].item() * B
@@ -686,7 +707,7 @@ class TrainerDiffusion:
             pbar.set_postfix(loss=f"{meters['total']/n:.4f}")
             if tb_writer and it % 20 == 0:
                 step = epoch * len(self.train_loader) + it
-                tb_writer.add_scalar("train/loss_step", loss.item(), step)
+                tb_writer.add_scalar("train/loss_step", loss_scaled.item(), step)
 
         avg = {k: v / n for k, v in meters.items()}
         

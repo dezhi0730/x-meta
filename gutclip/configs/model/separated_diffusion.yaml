@@ -1,0 +1,51 @@
+# Separated Diffusion Model 配置
+# 用于管理模型的各种维度参数
+
+# 基础特征维度
+base_input_dim: 4  # x_t(1) + x_static(2) + mask_feat(1)
+
+# DNA编码器配置
+dna_encoder:
+  input_dim: 768      # DNA-BERT嵌入维度
+  output_dim: null    # 输出维度（null表示自动检测）
+  dropout_rate: 0.25
+  num_heads: 8        # 注意力头数
+
+# 树编码器配置
+tree_encoder:
+  hidden_dim: 128
+  out_dim: 256
+  num_layers: 4
+  dropout_rate: 0.25
+  return_node_emb: true
+
+# 时间嵌入配置
+time_embed:
+  input_dim: 1        # 时间步输入维度
+  hidden_dim: 128     # 时间嵌入维度
+  output_dim: 256     # 时间条件输出维度
+
+# 分离头配置
+heads:
+  abundance:
+    hidden_dim: 64
+    output_dim: 1
+    dropout_rate: 0.25
+  presence:
+    hidden_dim: 64
+    output_dim: 1
+    dropout_rate: 0.25
+
+# 预训练配置
+pretrained:
+  dna_encoder: true   # 是否使用预训练DNA encoder
+  tree_encoder: false # 是否使用预训练tree encoder（通常不兼容）
+  freeze_dna: true    # 是否冻结DNA encoder参数
+  freeze_tree: false  # 是否冻结tree encoder参数
+
+# 训练配置
+training:
+  lambda_abun: 1.0    # abundance损失权重
+  lambda_pres: 1.0    # presence损失权重
+  use_ema: false      # 是否使用EMA
+  ema_decay: 0.9999   # EMA衰减率 

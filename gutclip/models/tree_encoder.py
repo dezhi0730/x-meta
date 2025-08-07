@@ -120,7 +120,7 @@ class PhyloEGCL(MessagePassing):
 
 # ---------- 3. 增强的EGNN网络 ----------
 class PhyloEGNN(nn.Module):
-    def __init__(self, in_dim=9, h=128, out_dim=256, L=4, aggr="add", dropout=0.15):
+    def __init__(self, in_dim=9, h=128, out_dim=256, L=4, aggr="add", dropout=0.15,return_node_emb=False):
         super().__init__()
         self.proj = nn.Sequential(nn.Linear(in_dim, h),
                                   nn.LayerNorm(h), nn.GELU())
@@ -141,6 +141,7 @@ class PhyloEGNN(nn.Module):
             nn.Linear(h, h), nn.LayerNorm(h), nn.GELU(),
             nn.Dropout(dropout), nn.Linear(h, out_dim)
         )
+        self.return_node_emb = return_node_emb
 
         self._init_weights()
 
@@ -170,20 +171,29 @@ class PhyloEGNN(nn.Module):
             assert torch.isfinite(x).all(), f"[NaN] after layer {idx}"
             pos = self._norm_pos(pos)      # 每层归一化
             
-
-        return self.out(self.pool(x, batch))
+        h = self.out(x)
+        if self.return_node_emb:
+            return h
+        return self.pool(h, batch)
 
 
 # ---------- TreeEncoder ----------
 class TreeEncoder(nn.Module):
     def __init__(self, input_dim=9, hidden_dim=128, out_dim=256,
-                 num_layers=4, dropout_rate=0.25):
+                 num_layers=4, dropout_rate=0.25, return_node_emb=False):
         super().__init__()
         self.feat_drop = nn.Dropout(dropout_rate)
         self.egnn = PhyloEGNN(
             in_dim=input_dim, h=hidden_dim, out_dim=out_dim,
-            L=num_layers, aggr="add", dropout=dropout_rate
+            L=num_layers, aggr="add", dropout=dropout_rate, return_node_emb=return_node_emb
         )
+        
+        # 如果只要节点嵌入，冻结无用的 pool / out 参数
+        if return_node_emb:
+            for p in self.egnn.pool.parameters():
+                p.requires_grad_(False)
+            for p in self.egnn.out.parameters():
+                p.requires_grad_(False)
 
     def forward(self, x, edge_index, pos, batch):
         x = self.feat_drop(x)

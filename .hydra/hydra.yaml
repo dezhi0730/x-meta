@@ -114,7 +114,7 @@ hydra:
     - hydra.run.dir=.
     - hydra.mode=RUN
     task:
-    - run_name=gutclip_diff_20250727-164110
+    - run_name=gutclip_diff_20250729-133757
     - wandb.mode=offline
     - retrieval.index=datasets/diffusion/V3/faiss_index.faiss
     - retrieval.y=datasets/diffusion/V3/faiss_index.y.npy
@@ -123,7 +123,7 @@ hydra:
   job:
     name: train_gen_model
     chdir: false
-    override_dirname: retrieval.ids=datasets/diffusion/V3/faiss_index.ids.npy,retrieval.index=datasets/diffusion/V3/faiss_index.faiss,retrieval.k=5,retrieval.y=datasets/diffusion/V3/faiss_index.y.npy,run_name=gutclip_diff_20250727-164110,wandb.mode=offline
+    override_dirname: retrieval.ids=datasets/diffusion/V3/faiss_index.ids.npy,retrieval.index=datasets/diffusion/V3/faiss_index.faiss,retrieval.k=5,retrieval.y=datasets/diffusion/V3/faiss_index.y.npy,run_name=gutclip_diff_20250729-133757,wandb.mode=offline
     id: ???
     num: ???
     config_name: train_gen_model

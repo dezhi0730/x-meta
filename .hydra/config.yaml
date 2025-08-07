@@ -13,7 +13,7 @@ model:
   base_channels: 128
   layers_per_block: 2
   norm_num_groups: 8
-run_name: gutclip_diff_20250727-164110
+run_name: gutclip_diff_20250729-133757
 seed: 42
 data:
   train_embed_pt: datasets/diffusion/V3/train_embeddings.pt
@@ -23,21 +23,38 @@ retrieval:
   'y': datasets/diffusion/V3/faiss_index.y.npy
   ids: datasets/diffusion/V3/faiss_index.ids.npy
   k: 5
+  metric: l2
+  softmax_temp: 0.1
+  sim_thresh: null
 train:
   epochs: 250
   batch_size: 128
-  lr: 0.0001
   weight_decay: 0.01
   scheduler_type: ddpm
   num_timesteps: 1000
   warmup_steps: 500
-  grad_clip: 1.0
+  grad_clip: 0.5
   precision: amp
   lambda_rank: 0.1
   log_interval: 50
   save_ckpt_every: 5000
   patience: 20
   min_delta: 1.0e-06
+  sigma_min: 0.03
+  logsnr_min: -6.0
+  logsnr_max: 8.0
+  p_high_snr: 1.0
+  lambda_high: 0.22
+  lambda_mag: 3.0
+  lambda_ang: 0.6
+  lambda_norm: 0.5
+  lambda_ortho: 0.6
+  high_snr_center: 5.9
+  high_snr_tau: 0.6
+  gamma_min_snr: 6.0
+  lr: 0.0001
+  lambda_fuse: 0.1
+  lambda_reg: 0.0001
 num_workers: 4
 sampler:
   steps: 50
@@ -47,4 +64,4 @@ sampler:
 wandb:
   project: gutclip
   mode: offline
-  notes: FiLM-UNet1D + softmax-kNN prior
+  notes: FiLM-UNet1D + softmax-kNN prior + FusionHead

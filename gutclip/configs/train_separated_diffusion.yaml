@@ -30,19 +30,20 @@ keep_min      : 128
 
 # ---------- training ----------
 train:
-  epochs: 200              # 增加训练轮数
-  batch_size: 128         # 减少batch_size，避免内存不足
+  epochs: 500              # 增加训练轮数
+  batch_size: 128         # 恢复原来的batch_size
   lr: 5.0e-4             # 降低学习率，更稳定
   weight_decay: 1.0e-4   # 使用wd参数名
   # warmup_steps: 1000     # 增加预热步数，让学习率有更多时间稳定
   warmup_ratio: 0.1
   amp: true
   use_ema: false          # 暂时关闭EMA，避免模型实例化问题
+  prediction_type: "eps"
   ema_decay: 0.9999
   
   # 分离建模参数
   separated_modeling: true  # 重要：启用分离建模
-  lambda_abun: 4.0         # abundance损失权重
+  lambda_abun: 2.0         # abundance损失权重
   lambda_pres: 1.0         # presence损失权重（增加权重，因为presence更难学习）
   
   # 学习率调度参数
@@ -51,7 +52,7 @@ train:
 # ---------- data loading ----------
 num_workers   : 8         # 适中的worker数量，平衡CPU和GPU利用率
 pin_memory    : true      # 启用pin_memory，提高GPU数据传输效率
-prefetch_factor: 2        # 降低预取因子，避免内存问题
+prefetch_factor: 2        # 适中的预取因子，避免内存问题
 
 # 模型配置
 model_config: "gutclip/configs/model/separated_diffusion.yaml"  # 模型配置文件路径

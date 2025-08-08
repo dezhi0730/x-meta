@@ -95,6 +95,7 @@ def main():
         model=model,
         loader=data_module.train_dataloader(),
         optimizer=optimizer,
+        val_loader=data_module.val_dataloader(),
         epochs=cfg["epochs"],
         betas=torch.linspace(cfg["beta_start"], cfg["beta_end"], cfg["T"]),
         cfg=cfg,

@@ -28,6 +28,23 @@ export OMP_NUM_THREADS=16
 # 如需限制可见 GPU，自行修改
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1}
 
+# DDP相关环境变量设置
+if [[ "${MODE}" == "ddp" ]]; then
+    # 设置NCCL环境变量以提高DDP性能
+    export NCCL_DEBUG=INFO
+    export NCCL_IB_DISABLE=1  # 如果使用 InfiniBand，可以注释掉这行
+    export NCCL_TIMEOUT=30
+    export NCCL_BLOCKING_WAIT=1
+    
+    # 设置分布式训练相关环境变量
+    export MASTER_ADDR=localhost
+    export MASTER_PORT=29510
+    
+    echo "[INFO] DDP环境变量设置完成"
+    echo "[INFO] NCCL_DEBUG: $NCCL_DEBUG"
+    echo "[INFO] CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
+fi
+
 # 生成一个时间戳 run_name 方便区分多次实验
 TS=$(date "+%Y%m%d-%H%M%S")
 RUN_NAME="separated_diffusion_${TS}"
@@ -57,7 +74,9 @@ mkdir -p logs
 
 if [[ "${MODE}" == "ddp" ]]; then
   echo "[Info] launching torchrun with ${NGPUS} GPUs..."
-  torchrun --nproc_per_node="${NGPUS}" -m gutclip.cmdline.train_separated_diffusion \
+  torchrun --nproc_per_node="${NGPUS}" \
+    --master_port=29510 \
+    -m gutclip.cmdline.train_separated_diffusion \
     --config "${CFG}" \
     2>&1 | tee "logs/${RUN_NAME}.log"
 else

@@ -112,7 +112,8 @@ def main():
     # 创建训练器
     trainer = TreeDiffusionTrainer(
         model=model,
-        loader=train_loader,
+        train_loader=train_loader,
+        val_loader=val_loader,
         optimizer=optimizer,
         epochs=cfg.train.epochs,
         betas=betas,

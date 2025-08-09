@@ -50,7 +50,7 @@ train:
   min_lr_ratio: 0.02       # 最低学习率占初始学习率的比例
 
 # ---------- data loading ----------
-num_workers   : 8         # 适中的worker数量，平衡CPU和GPU利用率
+num_workers   : 4         # 适中的worker数量，平衡CPU和GPU利用率
 pin_memory    : true      # 启用pin_memory，提高GPU数据传输效率
 prefetch_factor: 2        # 适中的预取因子，避免内存问题
 

@@ -24,7 +24,7 @@ NGPUS=${2:-1}
 CFG="gutclip/configs/train_separated_diffusion.yaml"
 
 # 线程数（根据机器调整）
-export OMP_NUM_THREADS=16
+export OMP_NUM_THREADS=32
 # 如需限制可见 GPU，自行修改
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0,1}
 

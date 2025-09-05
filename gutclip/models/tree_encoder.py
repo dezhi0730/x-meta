@@ -171,10 +171,11 @@ class PhyloEGNN(nn.Module):
             assert torch.isfinite(x).all(), f"[NaN] after layer {idx}"
             pos = self._norm_pos(pos)      # 每层归一化
             
-        h = self.out(x)
         if self.return_node_emb:
+            h = self.out(x)
             return h
-        return self.pool(h, batch)
+        else:
+            return self.pool(x, batch)
 
 
 # ---------- TreeEncoder ----------

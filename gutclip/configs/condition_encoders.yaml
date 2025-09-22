@@ -1,0 +1,50 @@
+# 条件编码器配置文件
+# 灵活支持DNA + Bio prompt + Tech prompt的任意组合
+
+# 多条件编码器配置（推荐）
+multi_condition:
+  output_dim: 256
+  
+  # Bio prompt配置（可选）
+  bio_bundle_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_bundle_v1.npz"
+  bio_id2idx_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_id2idx_v1.pkl"
+  bio_manifest_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_manifest_v1.csv"
+  
+  # Tech prompt配置（可选，如果不需要可以设为null）
+  tech_bundle_path: null
+  tech_id2idx_path: null
+  tech_manifest_path: null
+  
+  # DNA配置
+  dna_dim: 768
+  use_dna: true
+  
+  # 其他参数
+  dropout: 0.1
+
+# 只有Bio prompt的配置
+bio_only:
+  output_dim: 256
+  bio_bundle_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_bundle_v1.npz"
+  bio_id2idx_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_id2idx_v1.pkl"
+  bio_manifest_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_manifest_v1.csv"
+  use_dna: false
+  dropout: 0.1
+
+# 只有DNA的配置
+dna_only:
+  output_dim: 256
+  use_dna: true
+  dna_dim: 768
+  dropout: 0.1
+
+# 无条件配置
+unconditional:
+  output_dim: 256
+  use_dna: false
+  dropout: 0.1
+
+# 简单编码器配置（用于测试）
+simple:
+  embedding_dim: 256
+  seed: 42

@@ -1,0 +1,101 @@
+# 基于Prompt Embeddings的条件分离建模扩散模型训练配置
+name          : prompt_conditional_separated_diffusion
+seed          : 42
+
+# ---------- data configuration ----------
+data:
+  type: "split"  # 使用split类型
+  tree_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/tree"
+  train_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/train_meta.csv"
+  val_meta: "/data/home/wudezhi/project/school/x-meta/datasets/V3_34806/val_meta.csv"
+  dna_dir: "/data/home/wudezhi/project/school/x-meta/datasets/raw/dna_embeddings_v3"
+  dna_ext: ".pt"
+  max_genes: 1024
+
+# ---------- model configuration ----------
+model:
+  hidden_dim: 128
+  out_dim: 256
+  num_layers: 4
+  dropout_rate: 0.25
+
+# ---------- diffusion ----------
+T             : 1000      # training timesteps
+beta_start    : 1.0e-4
+beta_end      : 2.0e-2
+beta_schedule : "linear"  # 使用linear调度器
+rand_mask_prob: 0.20
+keep_min      : 128
+
+# ---------- training ----------
+train:
+  epochs: 200              # 条件训练轮数，基于预训练模型可以少一些
+  batch_size: 32          # 条件训练batch size，使用prompt embeddings可能需要更多内存
+  lr: 1.0e-4             # 条件训练学习率，更保守
+  weight_decay: 1.0e-4   
+  warmup_ratio: 0.1
+  amp: true
+  use_ema: false          
+  prediction_type: "eps"
+  ema_decay: 0.9999
+  
+  # 分离建模参数
+  separated_modeling: true  
+  lambda_abun: 2.0         
+  lambda_pres: 1.0         
+  
+  # 学习率调度参数
+  min_lr_ratio: 0.02       
+
+# ---------- data loading ----------
+num_workers   : 4         
+pin_memory    : true      
+prefetch_factor: 2        
+
+# 模型配置
+model_config: "gutclip/configs/model/separated_diffusion.yaml"
+
+# DNA配置（可选）
+use_dna: false             # 条件训练时可以先不用DNA，专注于干预条件
+dna_dim: 768              
+dna_output_dim: null       
+
+# Prompt条件配置
+condition:
+  # 编码器配置
+  encoder_type: "multi_condition"   # 使用多条件编码器
+  output_dim: 256       # 条件嵌入维度
+  
+  # Bio prompt embeddings路径
+  bio_bundle_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_bundle_v1.npz"
+  bio_id2idx_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_id2idx_v1.pkl"
+  bio_manifest_path: "/data/home/wudezhi/project/school/x-meta/datasets/raw/prompt/bio_manifest_v1.csv"
+  
+  # Tech prompt配置（可选）
+  tech_bundle_path: null
+  tech_id2idx_path: null
+  tech_manifest_path: null
+  
+  # DNA配置
+  dna_dim: 768
+  
+  # Classifier-free guidance参数
+  unconditional_prob: 0.1  # Classifier-free guidance概率
+  
+  # 多任务训练权重
+  lam_cond: 1.0           # 配对+条件样本权重
+  lam_cond_only: 0.5      # 仅条件样本权重  
+  lam_uncond: 0.1         # 无条件样本权重
+
+# 预训练配置
+pretrained_ckpt: "/data/home/wudezhi/project/school/x-meta/checkpoints/tree_diffusion/best_sep_20250809_000547_abun0.0907_pres10.9625.pt"
+
+# 输出配置
+output_dir: "/data/home/wudezhi/project/school/x-meta/checkpoints/prompt_conditional_diffusion"
+save_every: 50
+eval_every: 25
+log_every: 10
+
+# 实验配置
+experiment_name: "prompt_conditional_diffusion"
+tags: ["prompt", "conditional", "diffusion", "separated"]

@@ -30,7 +30,7 @@ keep_min      : 128
 # ---------- training ----------
 train:
   epochs: 200              # 条件训练轮数，基于预训练模型可以少一些
-  batch_size: 32          # 条件训练batch size，使用prompt embeddings可能需要更多内存
+  batch_size: 128          # 条件训练batch size，使用prompt embeddings可能需要更多内存
   lr: 1.0e-4             # 条件训练学习率，更保守
   weight_decay: 1.0e-4   
   warmup_ratio: 0.1
@@ -92,9 +92,7 @@ pretrained_ckpt: "/data/home/wudezhi/project/school/x-meta/checkpoints/tree_diff
 
 # 输出配置
 output_dir: "/data/home/wudezhi/project/school/x-meta/checkpoints/prompt_conditional_diffusion"
-save_every: 50
-eval_every: 25
-log_every: 10
+save_latest_interval: 10
 
 # 实验配置
 experiment_name: "prompt_conditional_diffusion"

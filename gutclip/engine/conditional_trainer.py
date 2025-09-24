@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from typing import Dict, Any, Optional
 from gutclip.engine.trainer_tree_diffusion import TreeDiffusionTrainer
+from pathlib import Path
 
 
 class ConditionalTreeDiffusionTrainer(TreeDiffusionTrainer):
@@ -10,6 +11,13 @@ class ConditionalTreeDiffusionTrainer(TreeDiffusionTrainer):
     def __init__(self, model, train_loader, val_loader, optimizer, 
                  condition_encoder=None, unconditional_prob=0.1, **kwargs):
         super().__init__(model, train_loader, val_loader, optimizer, **kwargs)
+        
+        # 确保使用正确的输出目录
+        if hasattr(self, 'cfg') and 'output_dir' in self.cfg:
+            self.ckpt_dir = Path(self.cfg['output_dir'])
+            if self.is_main:
+                self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+                print(f"[INFO] 条件训练器检查点目录: {self.ckpt_dir}")
         
         self.condition_encoder = condition_encoder
         self.unconditional_prob = unconditional_prob  # Classifier-free guidance概率
@@ -159,8 +167,10 @@ class ConditionalTreeDiffusionTrainer(TreeDiffusionTrainer):
                 # 记录哪些样本被丢弃
                 batch.is_uncond = (mask.squeeze(1) > 0.5).float()  # (B,)
                 
-                if self.is_main and mask.sum() > 0:
-                    print(f"[DEBUG] {mask.sum().item()}/{batch_size} 样本使用无条件训练")
+                # 统计epoch级别的数据（不打印）
+                self.epoch_unconditional_count += mask.sum().item()
+                self.epoch_total_count += batch_size
+                self.epoch_batch_count += 1
             else:
                 batch.is_uncond = torch.zeros(batch_size, device=condition_embeddings.device)
             

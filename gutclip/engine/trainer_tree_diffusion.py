@@ -101,9 +101,12 @@ class TreeDiffusionTrainer:
             self.ema_model = None
 
         # ---- ckpt dir ----
-        self.ckpt_dir = pathlib.Path("checkpoints/tree_diffusion")
+        # 优先使用配置文件中的output_dir，否则使用默认路径
+        output_dir = cfg.get("output_dir", "checkpoints/tree_diffusion")
+        self.ckpt_dir = pathlib.Path(output_dir)
         if self.is_main:
             self.ckpt_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[INFO] 检查点保存目录: {self.ckpt_dir}")
 
         # ---- grad clip ----
         self.max_grad_norm = self.cfg.get("max_grad_norm", 0.5)
@@ -458,7 +461,7 @@ class TreeDiffusionTrainer:
         save_latest = False
         
         # 方案1: 每N个epoch保存一次 (推荐)
-        save_interval = self.cfg.get("save_latest_interval", 10)  # 默认每5个epoch保存一次
+        save_interval = self.cfg.get("save_latest_interval", 10)  # 默认每10个epoch保存一次
         if epoch % save_interval == 0:
             save_latest = True
             
@@ -474,11 +477,28 @@ class TreeDiffusionTrainer:
         if getattr(self, "separated_modeling", False) and metrics is not None:
             pres1_acc = (metrics or {}).get('pres1_accuracy', 0.0)
             abun_mse  = (metrics or {}).get('abun_mse', float('inf'))
-            if pres1_acc >= self.pres1_acc_threshold and abun_mse < self.best_abun_mse_at_pres1:
+            # 修复：第一个满足pres1_acc条件的模型直接保存，或者abun_mse有改善
+            if pres1_acc >= self.pres1_acc_threshold and (self.best_abun_mse_at_pres1 == float("inf") or abun_mse < self.best_abun_mse_at_pres1):
+                # 删除旧的best模型文件
+                if self.best_ckpt_path and self.best_ckpt_path.exists():
+                    self.best_ckpt_path.unlink(missing_ok=True)
+                    print(f"[INFO] 删除旧的best模型: {self.best_ckpt_path.name}")
+                
                 self.best_abun_mse_at_pres1 = abun_mse
                 best_sep_path = self.ckpt_dir / f"best_sep_{timestamp}_abun{abun_mse:.4f}_pres1{pres1_acc:.4f}.pt"
                 torch.save(obj, best_sep_path)
                 self.best_ckpt_path = best_sep_path
+                
+                # 保存best模型信息到JSON文件
+                best_info = {
+                    "path": str(best_sep_path),
+                    "epoch": epoch + 1,
+                    "abun_mse": abun_mse,
+                    "pres1_accuracy": pres1_acc,
+                    "timestamp": timestamp
+                }
+                (self.ckpt_dir / "best.json").write_text(json.dumps(best_info, indent=2))
+                
                 print(f"[✓] 新 best(分离建模, 基于验证): {best_sep_path.name} (abun_mse={abun_mse:.4f}, pres1_acc={pres1_acc:.4f})")
                 self._tb_add_scalar('Model/Best_AbunMSE_at_Pres1', abun_mse, epoch)
                 self._tb_add_text('Model/Best_Sep_Checkpoint', str(best_sep_path), epoch)
